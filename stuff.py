@@ -1,99 +1,67 @@
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, render_template, jsonify, request
 import serial
-import serial.tools.list_ports
+import csv
 import threading
-import eventlet
-import socketio
+import time
+from datetime import datetime
 
-sio = socketio.Server()
-app = socketio.WSGIApp(sio, static_files={
-    '/': {'content_type': 'text/html', 'filename': 'index.html'}
-})
-
-@sio.event
-def connect(sid, environ):
-    print('connect ', sid)
-
-@sio.event
-def my_message(sid, data):
-    print('message ', data)
-
-@sio.event
-def disconnect(sid):
-    print('disconnect ', sid)
-
-if __name__ == '__main__':
-    eventlet.wsgi.server(eventlet.listen(('', 5001)), app)
-
-#### global vars ####
-
-### the current indoor air quality value ####
-current_iaq_val = ""
-
-#### global vars ####
+app = Flask(__name__)
+app.sensor_data = None  # To store the sensor data
 
 
+# Route for the home page
+@app.route('/')
+def index():
+    return render_template('index.html', data=app.sensor_data)
 
-#### flask stuff ####
+@app.route('/data')
+def get_sensor_data():
+    return jsonify(data=app.sensor_data)
 
-# app = Flask(__name__)
-
-# socketio = SocketIo(app)
-
-# @app.route("/send", methods=['POST'])
-# def text():
+# @app.route('/location', methods=["POST"])
+# def get_location_data():
 #     data = request.json
-#     print(data["lat"], data["lon"])
-#     return jsonify({
-#         "response": "location request"
-#     })
+#     print(data["latitude"], ", ", data["longitude"])
+#     write_to_csv(app.sensor_data, data["latitude"], data["longitude"])
 
-# @app.route('/')
-# def index():
-#     iaq = current_iaq_val
-#     return render_template('index.html', iaq=iaq)
+#     return jsonify(response="received location data! danke!")
 
-#### flask stuff ####
-
-#### connect to esp stuff ####
-
-
-def connect_to_esp():
-    ports = [port for port in serial.tools.list_ports.comports()]
-    for p in range(len(ports)):
-        print(f"{p}. " + ports[p].device)
-
-    portSelect = int(input("Enter your port number: "))
-    while portSelect > len(ports) or portSelect < 0:
-        portSelect = int(input("Enter your port number: "))
-
-    ser = serial.Serial(ports[portSelect].device, 115200)
-
-    with open("output.csv", "a") as file:
+# Function to read data from the sensor
+def read_sensor_data():
+    with serial.Serial('/dev/cu.usbserial-0001', 115200) as ser:
         while True:
+            try:
+                data = ser.readline().decode().strip()
 
-            data_in = ser.readline().decode()
+                # Write data to a CSV file
+                with open('sensor_data.csv', 'a') as csv_file:
+                    writer = csv.writer(csv_file)
+                    writer.writerow([data, datetime.now()])
 
-            current_iaq_val = data_in
+                # Update sensor_data variable
+                app.sensor_data_lock.acquire()
+                app.sensor_data = data
+                app.sensor_data_lock.release()
 
-            print(f"writing data to file: {data_in}")
-            
-            socketio.emit('sensor', {'value': current_iaq_val})
+            except serial.SerialException:
+                print("waiting to read data")
+                time.sleep(0.2)
 
-            file.write(data_in)
-
-
-
-# Start Flask server
-# if __name__ == '__main__':
-#     socketio.run(app)
-#### start listening on esp serial port ####
-esp_thread = threading.Thread(target=connect_to_esp)
-esp_thread.start()
-#### start listening on esp serial port ####
+def write_to_csv(data, lat, lon):
+    # Write to CSV file only if all values are available
+    if data is not None and lat is not None and lon is not None:
+        with open('sensor_data.csv', 'a') as csv_file:
+            writer = csv.writer(csv_file)
+            writer.writerow([data, lat, lon])
 
 
-#### start the webserver with socket io ####
-if __name__ == '__main__':
-    eventlet.wsgi.server(eventlet.listen(('', 5001)), app)
-#### start the webserver with socket io ####
+# Start reading sensor data in a separate thread
+sensor_thread = threading.Thread(target=read_sensor_data)
+sensor_thread.daemon = True
+sensor_thread.start()
+
+# Initialize lock for sensor_data list
+app.sensor_data_lock = threading.Lock()
+
+# Start the Flask web server
+app.run()

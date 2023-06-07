@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Sensor Data</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+        // Function to update the sensor data on the webpage
+        // function updateSensorData() {
+        //     $.getJSON('/data', function(data) {
+        //         var sensorData = data.data;
+        //         // Update the HTML element with the sensor data
+        //         $('#sensor-data').text(sensorData);
+        //         cascadingInputFunction(sensorData);
+        //     });
+        // }
+        function updateSensorData() {
+            // Get geolocation data from the browser
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(function(position) {
+                    var latitude = position.coords.latitude;
+                    var longitude = position.coords.longitude;
+                    
+                    // Create JSON object with geolocation data
+                    var locationData = {
+                        latitude: latitude,
+                        longitude: longitude
+                    };
+                    
+                    // Send geolocation data to the server
+                    $.ajax({
+                        type: 'POST',
+                        url: '/data',
+                        contentType: 'application/json',
+                        data: JSON.stringify(locationData),
+                        success: function(response) {
+                            var sensorData = response.data.sensor_data;
+                            // Update the HTML element with the sensor data
+                            $('#sensor-data').text(sensorData);
+                            
+                            // Perform your desired action with the sensor data
+                            cascadingInputFunction(sensorData);
+                        },
+                        error: function(error) {
+                            console.log('Error:', error);
+                        }
+                    });
+                });
+            } else {
+                console.log('Geolocation is not supported by this browser.');
+            }
+        }
+
+
+        // Periodically update the sensor data
+        setInterval(updateSensorData, 1000);  // Update every second
+
+        // aesthetic stuff
+        let cascadingInput = [];
+
+        function cascadingInputFunction(val) {
+            let intext = val;
+
+            // cascading input styling
+            
+            if (cascadingInput.length >= 8) {
+                cascadingInput.shift();
+            }
+            let sensorOut = document.querySelector(".sensor_out");
+
+            sensorOut.innerHTML = "";
+
+            cascadingInput.push(intext);
+
+            for (let i = cascadingInput.length-1; i > 0; i--) {
+                let p = document.createElement("div");
+                p.innerText = cascadingInput[i];
+                p.style.color = `rgb(${255 - (i * 20)}, ${255 - (i * 20)}, ${255 - (i * 20)})`;
+                p.classList.add("lighter");
+                p.classList.add("prev_vals")
+                sensorOut.appendChild(p);
+            }
+        };
+
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=DotGothic16&display=swap');
+        body {
+            font-family: 'DotGothic16', sans-serif;
+            padding: 0;
+            margin: 0;
+            border-collapse: collapse;
+        }
+        h1 {
+            font-size: 3rem;
+        }
+        .prev_vals {
+            font-size: 2.2rem;
+        }
+        .sensor_out {
+            border: 0;
+        }
+    </style>
+</head>
+<body>
+    <!-- <h1>Sensor Data</h1> -->
+    <div style="overflow: hidden; width: 100vw; height: 1.5rem;" class="stuff">sensor-data-sensor-data-sensor-data-sensor-data-sensor-data-sensor-data-sensor-data-sensor-data-sensor-data-sensor-data-sensor-data-sensor-data-sensor-data-sensor-data-sensor-data-sensor-data-sensor-data-sensor-data-sensor-data-</div>
+    <h1 id="sensor-data"></h1>
+    <div class="sensor_out">
+
+    </div>
+</body>
+</html>
